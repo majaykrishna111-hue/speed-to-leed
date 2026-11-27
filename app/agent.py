@@ -152,6 +152,8 @@ def _run(db: Session, lead_id: int, deps: Deps) -> None:
     except Exception as exc:
         db.rollback()  # tool side effects were already committed round by round
         db.refresh(lead)
+        log.warning("Agent error for lead %s (opener=%s): %s: %s", lead.id, is_opener,
+                    type(exc).__name__, str(exc)[:1000])
         log_event(db, "agent_error", lead, error=f"{type(exc).__name__}: {str(exc)[:300]}",
                   opener=is_opener)
         db.commit()
@@ -167,7 +169,7 @@ def _run(db: Session, lead_id: int, deps: Deps) -> None:
             send_sms(db, deps, client, lead,
                      f"You're all set for {ctx.booked_label}. {client.config.get('what_to_expect', '')}".strip())
         else:
-            _hand_to_human(db, deps, client, lead, f"Agent error ({type(exc).__name__})",
+            _hand_to_human(db, deps, client, lead, f"Agent error ({type(exc).__name__}: {str(exc)[:200]})",
                            holding_text="Thanks for your message! A team member will text you back shortly.")
         return
 

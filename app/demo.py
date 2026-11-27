@@ -21,14 +21,14 @@ from pydantic import BaseModel, Field
 from . import flows
 from .adapters import Deps, FakeSMS, llm_key_name
 from .agent import run_agent
-from .calendar_slots import FakeCalendar
+from .calendar_slots import FakeCalendar, slot_label
 from .models import Client, Lead, as_utc, make_session_factory
 
 ROOT = Path(__file__).resolve().parent.parent
 DEMO_HTML = Path(__file__).resolve().parent / "static" / "demo.html"
 DEMO_CLIENT_FILE = ROOT / "clients" / "triangle_comfort.json"
 DEMO_LEAD_PHONE = "+19195550142"
-URL_RE = re.compile(r"https?://\S+")
+ADMIN_URL_RE = re.compile(r"https?://\S*/admin")
 
 
 @dataclass
@@ -37,8 +37,8 @@ class DemoAlerts:
     sent: list[dict] = field(default_factory=list)
 
     def send(self, client_cfg, title, text, urgent=False):
-        # Alert text normally carries an inbox link with the admin token: never show it in the demo.
-        clean = "\n".join(line for line in (text or "").splitlines() if not URL_RE.search(line)).strip()
+        # Alert text carries an inbox link with the admin token: never show that in the demo.
+        clean = "\n".join(line for line in (text or "").splitlines() if not ADMIN_URL_RE.search(line)).strip()
         self.sent.append({"title": title, "text": clean, "urgent": bool(urgent),
                           "at": datetime.now(timezone.utc).isoformat()})
 
@@ -109,6 +109,23 @@ class DemoSession:
         self.threads.append(t)
         t.start()
 
+    def _agent_errors(self) -> list[str]:
+        return _agent_errors_from(self.sf)
+
+    def llm_check(self) -> dict:
+        """One tiny real request to the model, to confirm the key, model and quota work."""
+        if self.llm is None:
+            return {"ok": False, "error": self.llm_error}
+        from .prompt import load_tools
+        try:
+            resp = self.llm.create(system=[{"type": "text", "text": "Reply with the single word OK."}],
+                                   tools=load_tools(), messages=[{"role": "user", "content": "Say OK"}],
+                                   timeout=20, max_tokens=20)
+        except Exception as exc:
+            return {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:800]}"}
+        text = "".join(getattr(b, "text", "") or "" for b in resp.content)
+        return {"ok": True, "reply": text[:100]}
+
     def wait_idle(self, timeout: float = 30) -> None:
         for t in list(self.threads):
             t.join(timeout)
@@ -141,8 +158,7 @@ class DemoSession:
                 }
         bookings = [{
             "start": e["start"].astimezone(self.tz).isoformat(),
-            "label": f"{e['start'].astimezone(self.tz):%a %b} {e['start'].astimezone(self.tz).day}, "
-                     f"{_hour(e['start'].astimezone(self.tz))}-{_hour(e['end'].astimezone(self.tz))}",
+            "label": slot_label(e["start"].astimezone(self.tz), e["end"].astimezone(self.tz)),
             "summary": e["summary"], "description": e["description"],
         } for e in self.calendar.events[self.prefilled:]]
         provider = (self.settings.llm_provider or "gemini").lower()
@@ -151,8 +167,15 @@ class DemoSession:
             "business": self.business_name, "agent": self.agent_name, "provider": provider, "model": model,
             "llm_ready": self.llm is not None, "llm_error": self.llm_error,
             "busy": self.busy, "messages": messages, "lead": lead_info, "bookings": bookings,
-            "alerts": list(reversed(self.alerts.sent)), "errors": self.errors[-3:],
+            "alerts": list(reversed(self.alerts.sent)), "errors": (self.errors + self._agent_errors())[-3:],
         }
+
+
+def _agent_errors_from(sf) -> list[str]:
+    from .models import EventLog
+    with sf() as db:
+        rows = db.query(EventLog).filter(EventLog.type == "agent_error").order_by(EventLog.id).all()
+        return [str((r.data or {}).get("error", "unknown error")) for r in rows]
 
 
 def _hour(t: datetime) -> str:
@@ -304,6 +327,12 @@ def build_demo_router(manager: DemoManager) -> APIRouter:
         sid, _ = session_for(request)
         manager.reset(sid)
         return {"ok": True}
+
+    @router.get("/demo/api/llm-check")
+    def demo_llm_check(request: Request):
+        _, session = session_for(request)
+        manager.charge(session)
+        return session.llm_check()
 
     @router.get("/demo/api/health")
     def demo_health(request: Request):

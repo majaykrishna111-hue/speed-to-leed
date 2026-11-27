@@ -171,3 +171,21 @@ def test_daily_cap_across_visitors(env):
 def test_root_redirects_to_demo_keeping_token(env):
     r = env.http.get("/?token=abc", follow_redirects=False)
     assert r.status_code == 307 and r.headers["location"] == "/demo?token=abc"
+
+
+def test_llm_check_and_errors_are_visible(env):
+    env.llm.script(text("OK"))
+    assert env.http.get("/demo/api/llm-check").json() == {"ok": True, "reply": "OK"}
+    env.llm.script(RuntimeError("400 INVALID_ARGUMENT. API key not valid. Please pass a valid API key."))
+    r = env.http.get("/demo/api/llm-check").json()
+    assert r["ok"] is False and "API key not valid" in r["error"]
+    # A failed opener falls back to the template, and the real reason shows in the banner.
+    env.llm.script(RuntimeError("429 RESOURCE_EXHAUSTED quota"))
+    env.http.post("/demo/api/form", json={"name": "Jo", "zip": "", "issue": "x"})
+    s = state(env)
+    assert s["messages"][-1]["body"].endswith("Reply STOP to opt out.")
+    assert any("RESOURCE_EXHAUSTED" in e for e in s["errors"])
+    env.llm.script(RuntimeError("400 schema problem"))
+    env.http.post("/demo/api/sms", json={"body": "hi"})
+    s = state(env)
+    assert "400 schema problem" in s["alerts"][0]["text"]
