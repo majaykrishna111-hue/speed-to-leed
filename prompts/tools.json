@@ -1,0 +1,164 @@
+[
+  {
+    "name": "save_lead_details",
+    "description": "Save qualification details about the lead as soon as you learn them, so they are stored on the lead's record even if the conversation stops. Call it whenever the lead gives new information. Include only the fields you just learned or that changed; omitted fields keep their saved values. This saves data only; it sends nothing to the lead.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "service_type": {
+          "type": "string",
+          "enum": ["repair", "maintenance", "replacement_quote", "other"],
+          "description": "The kind of service the lead needs."
+        },
+        "issue_summary": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "One or two plain sentences describing the problem or request in the lead's own terms, for example 'AC runs but blows warm air, started yesterday, 2-story home.'"
+        },
+        "zip_code": {
+          "type": "string",
+          "pattern": "^[0-9]{5}$",
+          "description": "The 5-digit ZIP code of the service address."
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["emergency_today", "within_48_hours", "this_week", "flexible", "just_researching"],
+          "description": "How soon the lead needs service."
+        },
+        "full_name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "The lead's full name as they gave it."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The lead's email address, only if they shared it."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "check_service_area",
+    "description": "Check whether a ZIP code is inside the business's service area. Call this as soon as you have the lead's ZIP code and before offering any appointment times. Returns in_area (true or false), area_name when in the area, and an optional referral to share when out of the area.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "zip_code": {
+          "type": "string",
+          "pattern": "^[0-9]{5}$",
+          "description": "The 5-digit ZIP code of the service address."
+        }
+      },
+      "required": ["zip_code"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_available_slots",
+    "description": "Get real open appointment times from the business's live calendar. Call it only after the ZIP code is confirmed in the service area. Returns up to 3 slots, each with a slot_id and a human-readable label (for example 'Tue Dec 2, 8-10am arrival window'), or an empty list with a note. Offer only these slots, using their labels exactly. Slots you've offered stay listed in the lead context so you can book them on a later turn; availability is re-checked at booking. Call again if the lead asks for a different day or time.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "urgency": {
+          "type": "string",
+          "enum": ["emergency_today", "within_48_hours", "this_week", "flexible"],
+          "description": "How soon the lead needs service. Emergency and 48-hour requests return the earliest openings first."
+        },
+        "earliest_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Optional. The first date the lead is available, as YYYY-MM-DD, if they named one."
+        },
+        "time_of_day": {
+          "type": "string",
+          "enum": ["morning", "afternoon", "any"],
+          "description": "Optional. The lead's preferred time of day. Defaults to any."
+        }
+      },
+      "required": ["urgency"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "book_appointment",
+    "description": "Book the slot the lead chose onto the business's calendar. Call it only after the lead has clearly picked one of the slots you offered, and you have their full name. The lead's phone number is attached automatically. Returns status 'confirmed' with when_label and what_to_expect to use in your confirmation text, 'slot_unavailable' if someone else just took that time, or 'error'.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "slot_id": {
+          "type": "string",
+          "description": "The slot_id of the time the lead chose, exactly as returned by get_available_slots."
+        },
+        "full_name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "The lead's full name."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Optional. The lead's email for the confirmation. Leave this out if they didn't share one."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "A short summary for the technician: the service needed, the issue, urgency, and anything useful the lead mentioned (equipment age, pets, gate code, access notes). Facts from the conversation only."
+        }
+      },
+      "required": ["slot_id", "full_name", "notes"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "escalate_to_human",
+    "description": "Alert the business owner on Slack or email, and pause automated replies so a person takes over this conversation. Use it when the lead asks for a person, asks an important question the FAQ doesn't answer, complains, raises billing, warranty, insurance or legal topics, wants to change an existing appointment, wants to negotiate price, has an emergency, or when a tool fails or you're unsure. Returns when a team member is expected to respond, which you should use in your final text to the lead.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": [
+            "requested_human",
+            "complex_question",
+            "complaint",
+            "existing_appointment",
+            "pricing_negotiation",
+            "emergency",
+            "other"
+          ],
+          "description": "The main reason for the handoff."
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["normal", "urgent"],
+          "description": "Use 'urgent' for emergencies, and for leads who say they need service today."
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 600,
+          "description": "A brief for the owner: who the lead is, what they need, what's been collected so far (service, ZIP, urgency), and exactly what they asked that needs a person."
+        }
+      },
+      "required": ["reason", "urgency", "summary"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "close_conversation",
+    "description": "Mark the conversation as finished so no follow-ups are sent. Use it when the lead is out of the service area, not interested, has the problem handled, has the wrong number, or asks in any wording to stop being texted. For 'opt_out_request', the system records the opt-out and sends the required confirmation; reply with exactly NO_REPLY. For the other reasons, send one brief, friendly closing text.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": ["out_of_area", "not_interested", "already_handled", "wrong_number", "opt_out_request"],
+          "description": "Why the conversation is ending."
+        }
+      },
+      "required": ["reason"],
+      "additionalProperties": false
+    }
+  }
+]

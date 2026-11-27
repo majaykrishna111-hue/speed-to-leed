@@ -1,0 +1,11 @@
+# Scenario 3: pricing questions and objection, then booking
+# source: web_form
+# name: Maria Gonzalez
+# message: Need a quote to replace my 15 year old heat pump
+# zip: 27519
+# now: 2026-07-10T14:14
+How much does a new system cost?
+That seems like a lot of hassle just to get a number. Can't you give me a ballpark over text?
+Fine. No rush, what do you have next week? Mornings are best
+Monday 8-10 please
+maria.g@example.com

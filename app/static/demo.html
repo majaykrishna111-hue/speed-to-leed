@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speed-to-Lead Demo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:,">
+<script>
+  if (window.tailwind) tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
+</script>
+<style>
+  body { font-family: Inter, system-ui, sans-serif; }
+  .thread::-webkit-scrollbar { width: 6px; } .thread::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  .dot { animation: blink 1.2s infinite both; } .dot:nth-child(2) { animation-delay: .2s; } .dot:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .pop { animation: pop .25s ease-out; }
+  @media (prefers-reduced-motion: reduce) { .dot, .pop { animation: none; } }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen overflow-x-hidden">
+
+<header class="bg-white border-b border-slate-200">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3 justify-between">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">Speed-to-Lead SMS Booking Agent</h1>
+      <p class="text-sm text-slate-500">Live demo for <span id="biz" class="font-medium text-slate-700">Triangle Comfort Heating &amp; Air</span>, a fictional HVAC company. Texts, calendar and alerts are simulated; the AI agent is real. Your conversation is private to this tab.</p>
+    </div>
+    <span id="model" class="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">Loading model...</span>
+  </div>
+</header>
+
+<div id="banner" class="hidden max-w-7xl mx-auto mt-4 px-4 sm:px-6">
+  <div class="rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm px-4 py-3" id="bannerText"></div>
+</div>
+
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 grid gap-6 lg:grid-cols-2">
+
+  <!-- ============ LEFT: customer side ============ -->
+  <section aria-labelledby="custTitle" class="space-y-4 min-w-0">
+    <div class="min-h-[44px] flex items-center">
+      <h2 id="custTitle" class="text-sm font-semibold uppercase tracking-wide text-slate-500">Customer</h2>
+    </div>
+
+    <form id="quoteForm" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="font-semibold">Website quote form</h3>
+        <span class="text-xs text-slate-500 truncate">triangle-comfort.example</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <label class="sm:col-span-2 text-sm font-medium">Name
+          <input id="fName" required maxlength="100" value="Jordan Lee"
+                 class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </label>
+        <label class="text-sm font-medium">ZIP code
+          <input id="fZip" inputmode="numeric" maxlength="5" placeholder="27513"
+                 class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </label>
+      </div>
+      <label class="block text-sm font-medium">What's going on?
+        <textarea id="fIssue" required maxlength="500" rows="2"
+                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500">AC is running but blowing warm air. Upstairs is 85 degrees.</textarea>
+      </label>
+      <label class="flex items-start gap-2 text-xs text-slate-500">
+        <input type="checkbox" checked disabled class="mt-0.5">
+        I agree to receive texts about my request. Msg &amp; data rates may apply. Reply STOP to opt out.
+      </label>
+      <div class="flex flex-wrap gap-2 pt-1">
+        <button id="submitForm" type="submit"
+                class="rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 min-h-[44px] disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          Submit quote form
+        </button>
+        <button id="missedCall" type="button"
+                class="rounded-lg border border-slate-300 bg-white hover:bg-slate-50 font-semibold px-4 py-2.5 min-h-[44px] disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          Simulate missed call
+        </button>
+      </div>
+    </form>
+
+    <!-- Phone -->
+    <div class="mx-auto w-full max-w-[400px] rounded-[2.5rem] bg-slate-900 p-3 shadow-xl">
+      <div class="rounded-[2rem] bg-white overflow-hidden flex flex-col h-[620px]">
+        <div class="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50">
+          <div class="h-9 w-9 rounded-full bg-blue-600 text-white grid place-items-center font-semibold" aria-hidden="true">A</div>
+          <div class="min-w-0">
+            <div class="font-semibold text-sm truncate" id="phoneTitle">Triangle Comfort</div>
+            <div class="text-xs text-slate-500">(919) 555-0100 · Text message</div>
+          </div>
+        </div>
+        <div id="thread" class="thread flex-1 overflow-y-auto px-3 py-4 space-y-2 bg-white" aria-live="polite">
+          <p id="emptyThread" class="text-center text-sm text-slate-400 mt-24 px-6">Submit the quote form or simulate a missed call, then watch Ava text back.</p>
+        </div>
+        <div class="border-t border-slate-100 p-2 space-y-2">
+          <div class="flex gap-1.5 overflow-x-auto pb-1" id="chips"></div>
+          <form id="smsForm" class="flex items-end gap-2">
+            <label for="smsInput" class="sr-only">Text message</label>
+            <textarea id="smsInput" rows="1" maxlength="1600" placeholder="Text Ava..."
+                      class="flex-1 resize-none rounded-2xl border border-slate-300 px-3 py-2 text-base max-h-28 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+            <button id="sendBtn" type="submit" aria-label="Send"
+                    class="h-11 w-11 shrink-0 rounded-full bg-blue-600 hover:bg-blue-700 text-white grid place-items-center disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="currentColor" aria-hidden="true"><path d="M3.4 20.6 21 12 3.4 3.4l-.01 6.7L15 12 3.39 13.9z"/></svg>
+            </button>
+          </form>
+          <div class="flex justify-between text-xs text-slate-500 px-1">
+            <span id="charCount">0 characters</span><span id="segCount">0 SMS segments</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RIGHT: owner side ============ -->
+  <section aria-labelledby="ownerTitle" class="space-y-4 min-w-0">
+    <div class="flex items-center justify-between gap-3">
+      <h2 id="ownerTitle" class="text-sm font-semibold uppercase tracking-wide text-slate-500">Business owner live view</h2>
+      <button id="resetBtn" type="button"
+              class="rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-sm font-semibold px-4 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500">
+        Reset Demo
+      </button>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="font-semibold">Conversation status</h3>
+        <span id="statusPill" class="text-sm font-semibold px-3 py-1 rounded-full bg-slate-100 text-slate-600">No lead yet</span>
+      </div>
+      <p id="statusHint" class="text-sm text-slate-500 mt-2">Waiting for a new lead.</p>
+      <dl id="details" class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm"></dl>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold">Booked appointments</h3>
+        <span id="bookingCount" class="text-sm text-slate-500">0</span>
+      </div>
+      <div id="bookings" class="mt-3 space-y-3">
+        <p class="text-sm text-slate-400">Bookings appear here the moment Ava confirms one on the calendar.</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold">Owner alerts</h3>
+        <span id="alertCount" class="text-sm text-slate-500">0</span>
+      </div>
+      <div id="alerts" class="mt-3 space-y-3 max-h-[420px] overflow-y-auto">
+        <p class="text-sm text-slate-400">Slack and email alerts appear here: new bookings, handoffs, emergencies.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" role="status" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg"></div>
+
+<script>
+{
+  const TOKEN = new URLSearchParams(location.search).get('token');
+  const api = (path) => '/demo/api/' + path + (TOKEN ? '?token=' + encodeURIComponent(TOKEN) : '');
+  // Each browser tab gets its own private demo conversation.
+  function newSessionId() {
+    return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2, 12));
+  }
+  let SID;
+  try { SID = sessionStorage.getItem('demoSid') || newSessionId(); sessionStorage.setItem('demoSid', SID); }
+  catch (e) { SID = newSessionId(); }
+  const HEADERS = { 'X-Demo-Session': SID };
+  const $ = (id) => document.getElementById(id);
+  let last = '', state = null, posting = false;
+  // Only items that are new since the last render get the fade-in, so polling never flickers.
+  const seen = { messages: 0, bookings: 0, alerts: 0 };
+  function isNew(kind, index, total) {
+    if (total < seen[kind]) seen[kind] = 0;  // demo was reset
+    return index >= seen[kind];
+  }
+
+  const QUICK = ['27513', 'Tomorrow if possible', 'How much is a new system?',
+                 'Can I talk to a real person?', 'I smell gas in the basement', 'STOP'];
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
+  }
+
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.remove('hidden');
+    clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.add('hidden'), 3200);
+  }
+
+  // GSM-7 (cheap encoding): 160 chars per SMS, 153 when split. Anything else: 70 / 67.
+  const GSM = /^[A-Za-z0-9 \r\n@£$¥èéùìòÇØøÅå_ÆæßÉ!"#%&'()*+,\-./:;<=>?¡ÄÖÑÜ§¿äöñüà^{}\\\[~\]|€]*$/;
+  function segments(text) {
+    const n = text.length; if (!n) return 0;
+    return GSM.test(text) ? (n <= 160 ? 1 : Math.ceil(n / 153)) : (n <= 70 ? 1 : Math.ceil(n / 67));
+  }
+  function updateCounter() {
+    const v = $('smsInput').value, s = segments(v);
+    $('charCount').textContent = v.length + (v.length === 1 ? ' character' : ' characters');
+    $('segCount').textContent = s + (s === 1 ? ' SMS segment' : ' SMS segments') + (v && !GSM.test(v) ? ' (Unicode)' : '');
+  }
+
+  function time(iso) {
+    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  // ---------- Left: phone thread ----------
+  function renderThread(s) {
+    const thread = $('thread');
+    const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80;
+    thread.replaceChildren();
+    if (!s.messages.length) {
+      thread.append(el('p', 'text-center text-sm text-slate-400 mt-24 px-6',
+        'Submit the quote form or simulate a missed call, then watch ' + s.agent + ' text back.'));
+    }
+    s.messages.forEach((m, i) => {
+      const anim = isNew('messages', i, s.messages.length) ? 'pop ' : '';
+      if (m.role === 'event') {
+        const label = m.kind === 'missed_call' ? 'Missed call from (919) 555-0142' : 'Website quote form submitted';
+        thread.append(el('div', anim + 'text-center text-xs text-slate-400 py-2', label + ' · ' + time(m.at)));
+        return;
+      }
+      if (m.role === 'system_notice') {
+        thread.append(el('div', anim + 'text-center text-xs text-slate-500 bg-slate-50 rounded-lg mx-6 px-3 py-2', m.body));
+        return;
+      }
+      const mine = m.role === 'lead';
+      const row = el('div', anim + 'flex ' + (mine ? 'justify-end' : 'justify-start'));
+      const col = el('div', 'max-w-[80%] ' + (mine ? 'items-end' : 'items-start') + ' flex flex-col');
+      const bubble = el('div', 'px-3.5 py-2 rounded-2xl text-[15px] leading-snug whitespace-pre-wrap break-words ' +
+        (mine ? 'bg-blue-600 text-white rounded-br-md'
+              : m.role === 'staff' ? 'bg-emerald-100 text-emerald-950 rounded-bl-md'
+              : 'bg-slate-100 text-slate-900 rounded-bl-md'), m.body);
+      const who = mine ? 'You' : m.role === 'staff' ? 'Team member' : s.agent;
+      const over = m.chars > 300;
+      const meta = el('div', 'text-[11px] mt-1 px-1 ' + (over ? 'text-red-600 font-semibold' : 'text-slate-400'),
+        `${who} · ${time(m.at)} · ${m.chars}${mine ? '' : '/300'} chars`);
+      col.append(bubble, meta); row.append(col); thread.append(row);
+    });
+    seen.messages = s.messages.length;
+    if (s.busy) {
+      const row = el('div', 'flex justify-start');
+      const b = el('div', 'bg-slate-100 rounded-2xl rounded-bl-md px-4 py-3 flex gap-1');
+      b.setAttribute('aria-label', s.agent + ' is typing');
+      for (let i = 0; i < 3; i++) b.append(el('span', 'dot h-2 w-2 rounded-full bg-slate-400'));
+      row.append(b); thread.append(row);
+    }
+    if (atBottom || s.busy) thread.scrollTop = thread.scrollHeight;
+  }
+
+  // ---------- Right: owner view ----------
+  const PILL = {
+    'Active': ['bg-blue-100 text-blue-800', 'Ava is talking with this lead.'],
+    'Booked': ['bg-emerald-100 text-emerald-800', 'Appointment booked on the calendar.'],
+    'Escalated': ['bg-amber-100 text-amber-900', 'Handed to a person. Ava has stopped replying.'],
+    'Opted Out': ['bg-red-100 text-red-800', 'Customer opted out. No more texts will be sent.'],
+    'Closed': ['bg-slate-200 text-slate-700', 'Conversation closed.'],
+  };
+
+  function renderStatus(s) {
+    const pill = $('statusPill'), dl = $('details');
+    dl.replaceChildren();
+    if (!s.lead) {
+      pill.className = 'text-sm font-semibold px-3 py-1 rounded-full bg-slate-100 text-slate-600';
+      pill.textContent = 'No lead yet'; $('statusHint').textContent = 'Waiting for a new lead.';
+      return;
+    }
+    const L = s.lead, [cls, hint] = PILL[L.status] || PILL.Active;
+    pill.className = 'text-sm font-semibold px-3 py-1 rounded-full ' + cls;
+    pill.textContent = L.status;
+    let extra = '';
+    if (L.status === 'Closed' && L.closed_reason) extra = ' Reason: ' + L.closed_reason.replaceAll('_', ' ') + '.';
+    if (L.status === 'Escalated' && L.paused_reason) extra = ' Reason: ' + L.paused_reason.replaceAll('_', ' ') + '.';
+    $('statusHint').textContent = (s.busy ? 'Ava is replying now. ' : '') + hint + extra;
+    const area = L.zip ? L.zip + (L.in_area === true ? ' (in area)' : L.in_area === false ? ' (outside area)' : ' (not checked)') : null;
+    const rows = [['Name', L.name], ['Phone', '(919) 555-0142'], ['ZIP', area], ['Service', L.service && L.service.replaceAll('_', ' ')],
+                  ['Urgency', L.urgency && L.urgency.replaceAll('_', ' ')], ['Source', L.source && L.source.replaceAll('_', ' ')],
+                  ['Email', L.email], ['Issue', L.issue]];
+    for (const [k, v] of rows) {
+      const box = el('div', k === 'Issue' ? 'col-span-2' : '');
+      box.append(el('dt', 'text-slate-500', k), el('dd', 'font-medium break-words', v || '-'));
+      dl.append(box);
+    }
+  }
+
+  function renderBookings(s) {
+    const box = $('bookings'); $('bookingCount').textContent = s.bookings.length;
+    if (!s.bookings.length) {
+      seen.bookings = 0;
+      box.replaceChildren(el('p', 'text-sm text-slate-400', 'Bookings appear here the moment Ava confirms one on the calendar.'));
+      return;
+    }
+    box.replaceChildren(...s.bookings.map((b, i) => {
+      const card = el('div', (isNew('bookings', i, s.bookings.length) ? 'pop ' : '') + 'rounded-xl border border-emerald-200 bg-emerald-50 p-4');
+      card.append(el('div', 'text-xs font-semibold uppercase tracking-wide text-emerald-700', 'Google Calendar event'),
+                  el('div', 'text-lg font-bold mt-1', b.label), el('div', 'text-sm text-slate-700', b.summary));
+      const d = el('details', 'mt-2 text-sm');
+      d.append(el('summary', 'cursor-pointer text-emerald-800 font-medium', 'Event details'),
+               el('pre', 'mt-2 whitespace-pre-wrap font-sans text-slate-700 text-sm', b.description));
+      card.append(d); return card;
+    }));
+    seen.bookings = s.bookings.length;
+  }
+
+  function renderAlerts(s) {
+    const box = $('alerts'); $('alertCount').textContent = s.alerts.length;
+    if (!s.alerts.length) {
+      seen.alerts = 0;
+      box.replaceChildren(el('p', 'text-sm text-slate-400', 'Slack and email alerts appear here: new bookings, handoffs, emergencies.'));
+      return;
+    }
+    // Alerts are newest-first, so the new ones are at the top.
+    const fresh = s.alerts.length < seen.alerts ? s.alerts.length : s.alerts.length - seen.alerts;
+    box.replaceChildren(...s.alerts.map((a, i) => {
+      const card = el('div', (i < fresh ? 'pop ' : '') + 'rounded-xl border p-4 ' + (a.urgent ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-slate-50'));
+      const top = el('div', 'flex items-center justify-between gap-2');
+      const tag = el('span', 'text-xs font-bold tracking-wide ' + (a.urgent ? 'text-red-700' : 'text-slate-500'),
+                     a.urgent ? '[OWNER ALERT] URGENT' : '[OWNER ALERT]');
+      top.append(tag, el('span', 'text-xs text-slate-500', time(a.at)));
+      card.append(top, el('div', 'font-semibold mt-1', a.title));
+      if (a.text) card.append(el('pre', 'mt-2 whitespace-pre-wrap font-sans text-sm text-slate-700', a.text));
+      return card;
+    }));
+    seen.alerts = s.alerts.length;
+  }
+
+  function renderBanner(s) {
+    const msgs = [];
+    if (!s.llm_ready) msgs.push('The AI model is not set up: ' + (s.llm_error || 'unknown error'));
+    for (const e of s.errors || []) msgs.push('Agent error: ' + e);
+    $('banner').classList.toggle('hidden', !msgs.length);
+    $('bannerText').textContent = msgs.join('  ·  ');
+  }
+
+  function render(s) {
+    $('biz').textContent = s.business; $('phoneTitle').textContent = s.business;
+    $('model').textContent = (s.provider === 'gemini' ? 'Gemini' : 'Claude') + ' · ' + s.model;
+    renderThread(s); renderStatus(s); renderBookings(s); renderAlerts(s); renderBanner(s);
+    const lock = s.busy || posting;
+    $('submitForm').disabled = lock; $('missedCall').disabled = lock;
+    $('sendBtn').disabled = posting || !$('smsInput').value.trim();
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch(api('state'), { headers: HEADERS });
+      if (r.ok) {
+        const txt = await r.text();
+        if (txt !== last) { last = txt; state = JSON.parse(txt); render(state); }
+      } else if (r.status === 403) {
+        $('banner').classList.remove('hidden'); $('bannerText').textContent = 'This demo needs ?token=... in the URL.';
+      }
+    } catch (e) { /* server restarting; keep polling */ }
+    setTimeout(poll, state && state.busy ? 700 : 1500);
+  }
+
+  async function post(path, body) {
+    posting = true; if (state) render(state);
+    try {
+      const r = await fetch(api(path), { method: 'POST', headers: { ...HEADERS, 'Content-Type': 'application/json' },
+                                         body: body ? JSON.stringify(body) : '{}' });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        toast(typeof j.detail === 'string' ? j.detail : 'Request failed (' + r.status + ')');
+        return false;
+      }
+      return true;
+    } catch (e) { toast('Server not reachable'); return false; }
+    finally { posting = false; last = ''; setTimeout(poll, 150); }
+  }
+
+  $('quoteForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ok = await post('form', { name: $('fName').value.trim(), zip: $('fZip').value.trim(), issue: $('fIssue').value.trim() });
+    if (ok) toast('Form submitted. Watch the phone.');
+  });
+  $('missedCall').addEventListener('click', async () => { if (await post('missed-call')) toast('Call went unanswered. Ava is texting back.'); });
+
+  async function sendSms() {
+    const v = $('smsInput').value.trim(); if (!v) return;
+    $('smsInput').value = ''; updateCounter(); autosize();
+    if (!(await post('sms', { body: v }))) { $('smsInput').value = v; updateCounter(); }
+  }
+  $('smsForm').addEventListener('submit', (e) => { e.preventDefault(); sendSms(); });
+  $('smsInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendSms(); } });
+  function autosize() { const t = $('smsInput'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 112) + 'px'; }
+  $('smsInput').addEventListener('input', () => { updateCounter(); autosize(); if (state) render(state); });
+
+  for (const q of QUICK) {
+    const b = el('button', 'shrink-0 text-xs rounded-full border border-slate-300 px-3 py-1.5 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500', q);
+    b.type = 'button';
+    b.addEventListener('click', () => { $('smsInput').value = q; updateCounter(); $('smsInput').focus(); if (state) render(state); });
+    $('chips').append(b);
+  }
+
+  $('resetBtn').addEventListener('click', async () => {
+    if (await post('reset')) { toast('Demo reset. Fresh calendar and conversation.'); }
+  });
+
+  updateCounter();
+  poll();
+}
+</script>
+</body>
+</html>

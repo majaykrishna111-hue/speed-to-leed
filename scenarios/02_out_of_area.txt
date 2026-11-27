@@ -1,0 +1,6 @@
+# Scenario 2: out-of-area lead from a missed call
+# source: missed_call
+# now: 2026-07-10T19:40
+My furnace makes a loud bang every time it kicks on
+I'm in Charlotte, 28202
+Oh ok, thanks anyway

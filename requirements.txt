@@ -1,0 +1,16 @@
+google-genai==3.6.1
+anthropic==2.14.0
+fastapi==0.165.0
+uvicorn==0.54.0
+SQLAlchemy==2.1.9
+psycopg[binary]==3.3.9
+pydantic==2.13.5
+pydantic-settings==2.16.3
+email-validator==2.4.0
+python-multipart==0.0.32
+twilio==9.13.0
+google-api-python-client==2.202.0
+google-auth==2.63.1
+httpx==0.29.0
+phonenumbers==9.0.44
+pytest==9.1.1

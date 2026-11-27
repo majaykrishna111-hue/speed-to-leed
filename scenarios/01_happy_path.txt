@@ -1,0 +1,10 @@
+# Scenario 1: happy path booking from the website form
+# source: web_form
+# name: Jordan Lee
+# message: AC is running but blowing warm air. Upstairs is 85 degrees.
+# now: 2026-07-10T14:14
+27513
+Pretty soon, it's miserable up there. Tomorrow if possible
+Yes Saturday works
+jordan.lee@example.com
+Thanks!

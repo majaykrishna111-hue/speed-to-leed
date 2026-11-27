@@ -1,0 +1,52 @@
+{
+  "slug": "triangle-comfort",
+  "name": "Triangle Comfort Heating & Air",
+  "twilio_number": "+19195550100",
+  "timezone": "America/New_York",
+  "calendar_id": "REPLACE_WITH_CLIENT_CALENDAR_ID@group.calendar.google.com",
+  "config": {
+    "_note": "Fictional example business for testing. Replace every value for a real client.",
+
+    "agent_name": "Ava",
+    "business_type": "residential heating and air conditioning company",
+    "services": "AC and heat pump repair, furnace repair, seasonal tune-ups, full system replacement, ductless mini-splits",
+    "service_area_description": "Raleigh, Cary, Apex, Morrisville and Durham, NC",
+    "hours": "Mon-Fri 7am-6pm, Sat 8am-12pm",
+    "appointment_type": "in-home service visit with a 2-hour arrival window",
+    "emergency_policy": "Same-day emergency repairs when a technician is available; after-hours emergency fee applies",
+    "qualification_1": "the service type (repair, tune-up or replacement quote) and a one-line description of the problem",
+    "qualification_3": "urgency: emergency today, within 48 hours, this week, or flexible",
+    "faq": "- Diagnostic visit: $89, waived if you approve the repair.\n- Replacement estimates are free.\n- Tune-ups: $129 per system.\n- Financing: available on new systems, 0% for 18 months with approved credit.\n- Brands installed: Trane and Carrier.\n- Warranty: 1-year labor warranty on all repairs.\n- After-hours emergency fee: $150, on top of the repair cost.\n- Payment: cards, checks, financing. Payment is due when the work is done.\n- Technicians text 30 minutes before arriving.",
+
+    "service_zips": ["27513", "27518", "27519", "27511", "27502", "27539", "27560", "27601", "27603", "27605", "27606", "27607", "27608", "27609", "27612", "27615", "27617", "27701", "27703", "27705", "27707", "27713"],
+    "service_zip_prefixes": [],
+    "zip_area_names": {"27513": "Cary", "27518": "Cary", "27519": "Cary", "27511": "Cary", "27502": "Apex", "27539": "Apex", "27560": "Morrisville"},
+    "out_of_area_referral": "",
+
+    "slot_windows": {
+      "mon": [["08:00", "10:00"], ["10:00", "12:00"], ["13:00", "15:00"], ["15:00", "17:00"]],
+      "tue": [["08:00", "10:00"], ["10:00", "12:00"], ["13:00", "15:00"], ["15:00", "17:00"]],
+      "wed": [["08:00", "10:00"], ["10:00", "12:00"], ["13:00", "15:00"], ["15:00", "17:00"]],
+      "thu": [["08:00", "10:00"], ["10:00", "12:00"], ["13:00", "15:00"], ["15:00", "17:00"]],
+      "fri": [["08:00", "10:00"], ["10:00", "12:00"], ["13:00", "15:00"], ["15:00", "17:00"]],
+      "sat": [["08:00", "10:00"], ["10:00", "12:00"]]
+    },
+    "slot_capacity": 2,
+    "min_notice_minutes": 120,
+    "horizon_days": 14,
+    "office_hours": {"mon": ["07:00", "18:00"], "tue": ["07:00", "18:00"], "wed": ["07:00", "18:00"], "thu": ["07:00", "18:00"], "fri": ["07:00", "18:00"], "sat": ["08:00", "12:00"]},
+    "what_to_expect": "Your technician will text 30 minutes before arriving.",
+    "event_title_prefix": "HVAC visit",
+    "notify_on_booking": true,
+
+    "call_mode": "missed_only",
+    "forward_to_number": "",
+    "ring_seconds": 18,
+    "missed_call_greeting": "Thanks for calling Triangle Comfort Heating and Air. Sorry we can't pick up right now. We're texting you so we can help.",
+    "business_phone": "(919) 555-0100",
+
+    "form_secret": "REPLACE_WITH_A_LONG_RANDOM_STRING",
+    "slack_webhook_url": "",
+    "owner_email": ""
+  }
+}

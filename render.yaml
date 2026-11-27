@@ -1,0 +1,27 @@
+# Render Blueprint: deploys the live demo on Render's free plan.
+# Render dashboard -> New -> Blueprint -> pick this repo. You'll be asked for GEMINI_API_KEY.
+services:
+  - type: web
+    runtime: python
+    name: speed-to-lead-demo
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false          # Render asks you to paste it when you create the Blueprint
+      - key: ADMIN_TOKEN
+        generateValue: true  # random value; the staff inbox stays locked
+      - key: ENABLE_DEMO
+        value: "true"
+      - key: DEMO_DAILY_ACTION_LIMIT
+        value: "300"
+      - key: DEMO_MAX_ACTIONS_PER_SESSION
+        value: "30"

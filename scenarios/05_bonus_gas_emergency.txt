@@ -1,0 +1,4 @@
+# Bonus scenario: safety emergency (run this before every demo)
+# source: missed_call
+# now: 2026-07-10T22:30
+My furnace isn't working and I think I smell gas in the basement
