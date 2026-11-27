@@ -65,7 +65,7 @@ def test_request_uses_same_prompt_and_tools_with_no_auto_calling():
     assert [d.name for d in cfg.tools[0].function_declarations] == [t["name"] for t in load_tools()]
     assert cfg.automatic_function_calling.disable is True
     assert cfg.thinking_config.thinking_budget == 0
-    assert cfg.http_options.timeout == 7000
+    assert cfg.http_options.timeout == 11000  # Gemini refuses deadlines under 10 s
     assert fake.requests[0]["model"] == "gemini-2.5-flash"
     assert resp.stop_reason == "end_turn" and resp.content[0].text == "Hi there"
 
@@ -181,3 +181,43 @@ def test_gemini_3_uses_thinking_level_and_leaves_room_for_thoughts():
     assert cfg.thinking_config.thinking_level == types.ThinkingLevel.LOW
     assert cfg.thinking_config.thinking_budget is None
     assert cfg.max_output_tokens == 600 + 2048
+
+
+def test_our_short_deadline_is_enforced_client_side():
+    import time as _time
+    fake = FakeGenai()
+    slow = SimpleNamespace(generate_content=lambda **kw: (_time.sleep(1.5), reply(types.Part(text="late")))[1])
+    fake.models = slow
+    llm = GeminiLLM("key", "gemini-3.8-flash", client=fake)
+    started = _time.monotonic()
+    try:
+        llm.create([{"type": "text", "text": "S"}], load_tools(), [{"role": "user", "content": "hi"}], timeout=0.5)
+        raise AssertionError("should have timed out")
+    except TimeoutError:
+        pass
+    assert _time.monotonic() - started < 1.2
+
+
+def test_retry_waits_for_googles_suggested_delay(monkeypatch):
+    waits = []
+    monkeypatch.setattr("app.adapters.time.sleep", lambda s: waits.append(s))
+    llm, fake = gemini()
+    err = errors.APIError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED",
+                                          "details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo",
+                                                       "retryDelay": "6s"}]}})
+    fake.script(err, reply(types.Part(text="ok")))
+    resp = llm.create([{"type": "text", "text": "S"}], load_tools(), [{"role": "user", "content": "hi"}], 25)
+    assert waits == [6.0] and resp.content[0].text == "ok"
+
+
+def test_retry_skipped_when_suggested_delay_does_not_fit(monkeypatch):
+    monkeypatch.setattr("app.adapters.time.sleep", lambda s: None)
+    llm, fake = gemini()
+    err = errors.APIError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED",
+                                          "details": [{"retryDelay": "40s"}]}})
+    fake.script(err)
+    try:
+        llm.create([{"type": "text", "text": "S"}], load_tools(), [{"role": "user", "content": "hi"}], 25)
+        raise AssertionError("expected the 429 to surface")
+    except errors.APIError as exc:
+        assert exc.code == 429 and len(fake.requests) == 1

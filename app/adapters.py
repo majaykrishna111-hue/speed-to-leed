@@ -7,10 +7,13 @@ prompt, tools and guardrails are identical whichever provider you pick with LLM_
 import copy
 import json
 import logging
+import re
 import smtplib
 import time
 import uuid
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass, field
 from email.message import EmailMessage
 from types import SimpleNamespace
@@ -73,6 +76,21 @@ def gemini_schema(schema: dict) -> dict:
     return out
 
 
+_EXECUTOR = ThreadPoolExecutor(max_workers=16, thread_name_prefix="gemini")
+_RETRY_DELAY_RE = re.compile(r"retryDelay['\"]?\s*[:=]\s*['\"]?(\d+(?:\.\d+)?)s")
+
+
+def _api_timeout_ms(seconds: float) -> int:
+    """Gemini rejects request deadlines under 10 s, so never send less than 11 s."""
+    return int(max(seconds, 10) * 1000) + 1000
+
+
+def retry_delay_seconds(exc: Exception) -> Optional[float]:
+    """Google's suggested wait from a 429 error (RetryInfo.retryDelay), if present."""
+    m = _RETRY_DELAY_RE.search(str(getattr(exc, "details", "")) + " " + str(exc))
+    return float(m.group(1)) if m else None
+
+
 class GeminiLLM:
     """Gemini through the official google-genai SDK, translated to and from the Anthropic-style
     messages the agent uses. Tool calls run one at a time under our control (the SDK's automatic
@@ -110,7 +128,7 @@ class GeminiLLM:
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(mode="AUTO")),
             max_output_tokens=max_tokens + thinking,
-            http_options=types.HttpOptions(timeout=int(timeout * 1000)),
+            http_options=types.HttpOptions(timeout=_api_timeout_ms(timeout)),
         )
         if is_25:
             # 0 = no thinking: fastest, and keeps the first text inside the 10-second promise.
@@ -168,18 +186,32 @@ class GeminiLLM:
     # -- call with one retry for rate limits / server hiccups (free tier hits 429s often) --
 
     def _generate(self, contents, config, timeout: float):
+        """Call Gemini, enforcing OUR deadline (e.g. 7 s for the first text) client-side, since the
+        API itself refuses deadlines under 10 s. Retries once on 429/5xx when Google's suggested
+        wait still fits inside the deadline."""
         from google.genai import errors, types
         started = time.monotonic()
+
+        def attempt(cfg, budget: float):
+            future = _EXECUTOR.submit(self.client.models.generate_content,
+                                      model=self.model, contents=contents, config=cfg)
+            try:
+                return future.result(timeout=max(budget, 0.1))
+            except FuturesTimeout:
+                raise TimeoutError(f"Gemini did not answer within {budget:.1f}s") from None
+
         try:
-            return self.client.models.generate_content(model=self.model, contents=contents, config=config)
+            return attempt(config, timeout)
         except errors.APIError as exc:
             left = timeout - (time.monotonic() - started)
-            if (exc.code == 429 or exc.code >= 500) and left > 4:
-                log.warning("Gemini returned %s; retrying once", exc.code)
-                time.sleep(2)
+            wait = retry_delay_seconds(exc) or 2.0
+            if (exc.code == 429 or exc.code >= 500) and left - wait > 3:
+                log.warning("Gemini returned %s; retrying once in %.1fs", exc.code, wait)
+                time.sleep(wait)
+                left = timeout - (time.monotonic() - started)
                 config = copy.copy(config)
-                config.http_options = types.HttpOptions(timeout=int((left - 2.5) * 1000))
-                return self.client.models.generate_content(model=self.model, contents=contents, config=config)
+                config.http_options = types.HttpOptions(timeout=_api_timeout_ms(left))
+                return attempt(config, left)
             raise
 
     # -- response translation --
