@@ -27,8 +27,9 @@ class Settings(BaseSettings):
 
     # Gemini (Google AI Studio key)
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
-    gemini_thinking_budget: int = 0  # 0 = fastest; only applied to gemini-2.5 models
+    gemini_model: str = "gemini-3.8-flash"
+    gemini_thinking_budget: int = 0  # gemini-2.5 models only: 0 = fastest
+    gemini_thinking_level: str = "low"  # gemini-3+ models: minimal / low / medium / high
 
     # Anthropic
     anthropic_api_key: str = ""

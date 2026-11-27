@@ -25,7 +25,8 @@ def make_llm(settings) -> Any:
     """Pick the LLM client from LLM_PROVIDER ("gemini" or "anthropic")."""
     provider = (settings.llm_provider or "gemini").lower()
     if provider == "gemini":
-        return GeminiLLM(settings.gemini_api_key, settings.gemini_model, settings.gemini_thinking_budget)
+        return GeminiLLM(settings.gemini_api_key, settings.gemini_model, settings.gemini_thinking_budget,
+                         thinking_level=settings.gemini_thinking_level)
     if provider == "anthropic":
         return AnthropicLLM(settings.anthropic_api_key, settings.anthropic_model)
     raise ValueError(f"Unknown LLM_PROVIDER: {settings.llm_provider!r} (use 'gemini' or 'anthropic')")
@@ -77,13 +78,15 @@ class GeminiLLM:
     messages the agent uses. Tool calls run one at a time under our control (the SDK's automatic
     function calling is turned off), exactly like the Claude path."""
 
-    def __init__(self, api_key: str, model: str, thinking_budget: int = 0, client: Any = None):
+    def __init__(self, api_key: str, model: str, thinking_budget: int = 0, client: Any = None,
+                 thinking_level: str = "low"):
         if client is None:
             from google import genai
             client = genai.Client(api_key=api_key)
         self.client = client
         self.model = model
         self.thinking_budget = thinking_budget
+        self.thinking_level = (thinking_level or "").strip().upper()
         # Gemini attaches "thought signatures" to function-call parts. They must be sent back
         # unchanged on the next request of the same tool loop, so keep the original parts.
         self._call_parts: "OrderedDict[str, Any]" = OrderedDict()
@@ -96,7 +99,10 @@ class GeminiLLM:
                timeout: float, max_tokens: int = 600) -> Any:
         from google.genai import types
 
-        thinking = max(int(self.thinking_budget or 0), 0)
+        is_25 = self.model.startswith("gemini-2.5")
+        # Gemini 2.5 uses a token budget (0 = off). Gemini 3+ uses a level and always thinks a
+        # little, so leave room for those tokens or the visible reply gets cut off.
+        thinking = max(int(self.thinking_budget or 0), 0) if is_25 else 2048
         config = types.GenerateContentConfig(
             system_instruction="\n\n".join(b["text"] for b in system if b.get("text")),
             tools=[types.Tool(function_declarations=self._declarations(tools))],
@@ -106,9 +112,12 @@ class GeminiLLM:
             max_output_tokens=max_tokens + thinking,
             http_options=types.HttpOptions(timeout=int(timeout * 1000)),
         )
-        if self.model.startswith("gemini-2.5"):
+        if is_25:
             # 0 = no thinking: fastest, and keeps the first text inside the 10-second promise.
             config.thinking_config = types.ThinkingConfig(thinking_budget=thinking)
+        elif self.thinking_level:
+            # LOW keeps replies fast enough for the 10-second first text.
+            config.thinking_config = types.ThinkingConfig(thinking_level=self.thinking_level)
         return self._to_response(self._generate(self._to_contents(messages), config, timeout))
 
     # -- request translation --

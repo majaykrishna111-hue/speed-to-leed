@@ -98,7 +98,7 @@ Do these in order. The Twilio registration takes the longest, so start it on day
 
 **Free testing with Gemini (default, `LLM_PROVIDER=gemini`):**
 1. Create a free API key at https://aistudio.google.com/apikey and set `GEMINI_API_KEY`.
-2. The model is `GEMINI_MODEL=gemini-2.5-flash`, with thinking off (`GEMINI_THINKING_BUDGET=0`) for speed.
+2. The model is `GEMINI_MODEL=gemini-3.8-flash`, with a low thinking level (`GEMINI_THINKING_LEVEL=low`) for speed.
 3. The free tier has tight per-minute and per-day request limits; check yours in AI Studio. One customer reply can take 2 to 4 requests (one per tool round). On a rate-limit error the app waits 2 seconds and retries once; if that fails too, the normal safety net applies: holding text, owner alert, lead paused.
 4. **Never send real customer conversations through the free tier.** Google may use free-tier prompts and responses to improve its products. Use fictional test data only, and switch to a paid tier or to Anthropic before going live.
 

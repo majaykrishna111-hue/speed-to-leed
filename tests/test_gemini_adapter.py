@@ -169,3 +169,15 @@ def test_gemini_invented_slot_is_rejected(env):
     env.lead_texts("book me tomorrow 9am")
     sent_back = fake.requests[-1]["contents"][-1].parts[0].function_response.response
     assert "error" in sent_back and env.cal.events == []
+
+
+def test_gemini_3_uses_thinking_level_and_leaves_room_for_thoughts():
+    fake = FakeGenai()
+    llm = GeminiLLM("key", "gemini-3.8-flash", client=fake, thinking_level="low")
+    fake.script(reply(types.Part(text="Hi")))
+    llm.create([{"type": "text", "text": "S"}], load_tools(), [{"role": "user", "content": "hi"}], 7)
+    cfg = fake.requests[0]["config"]
+    assert fake.requests[0]["model"] == "gemini-3.8-flash"
+    assert cfg.thinking_config.thinking_level == types.ThinkingLevel.LOW
+    assert cfg.thinking_config.thinking_budget is None
+    assert cfg.max_output_tokens == 600 + 2048
