@@ -11,7 +11,8 @@ class Settings(BaseSettings):
     # Core
     database_url: str = "sqlite:///./speed_to_lead.db"
     public_base_url: str = "http://localhost:8000"  # used for Twilio signature checks and links
-    admin_token: str = "change-me"  # protects the staff inbox
+    # Signs staff login cookies. Set a long random value in production (Render generates one).
+    session_secret: str = ""
 
     # Live demo page at /demo (simulated texts and calendar, real LLM).
     # Each demo message spends LLM requests: on a public server set DEMO_TOKEN or turn it off.

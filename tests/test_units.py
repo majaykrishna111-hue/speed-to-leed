@@ -62,3 +62,23 @@ def test_sanitize_and_problems():
     assert problem_with("I have Tue 8-10am. Which works?") is None
     assert problem_with("Use slot_id s_abc123") is not None
     assert problem_with("We bring all our tools and parts.") is None
+
+
+def test_render_style_database_urls_use_psycopg3():
+    from app.models import normalize_database_url
+    assert normalize_database_url("postgresql://u:p@host:5432/db") == "postgresql+psycopg://u:p@host:5432/db"
+    assert normalize_database_url("postgres://u:p@host/db") == "postgresql+psycopg://u:p@host/db"
+    assert normalize_database_url("postgresql+psycopg://x") == "postgresql+psycopg://x"
+    assert normalize_database_url("sqlite:///./a.db") == "sqlite:///./a.db"
+
+
+def test_plain_postgresql_url_really_connects():
+    import os
+    url = os.environ.get("TEST_DATABASE_URL", "")
+    if not url.startswith("postgresql+psycopg://"):
+        return  # only meaningful when running the suite against Postgres
+    from sqlalchemy import text
+    from app.models import make_session_factory
+    sf = make_session_factory(url.replace("postgresql+psycopg://", "postgresql://"))
+    with sf() as db:
+        assert db.execute(text("select 1")).scalar() == 1

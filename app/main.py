@@ -3,7 +3,6 @@
 Run: uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
 import hmac
-import html
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -77,10 +76,6 @@ def create_app(deps: Optional[Deps] = None, session_factory=None) -> FastAPI:
     def client_by_number(db, number: str) -> Optional[Client]:
         phone = flows.normalize_phone(number) or number
         return db.scalar(select(Client).where(Client.twilio_number == phone, Client.active.is_(True)))
-
-    def require_admin(token: str) -> None:
-        if not hmac.compare_digest(token or "", settings.admin_token) or settings.admin_token == "change-me":
-            raise HTTPException(status_code=403, detail="Bad or default admin token")
 
     # ---------------- Twilio: SMS ----------------
 
@@ -159,83 +154,9 @@ def create_app(deps: Optional[Deps] = None, session_factory=None) -> FastAPI:
         code = 422 if status == "invalid_phone" else 200
         return JSONResponse({"ok": code == 200, "status": status}, status_code=code)
 
-    # ---------------- Staff inbox ----------------
-
-    STYLE = """<style>body{font:16px/1.5 system-ui,sans-serif;max-width:760px;margin:0 auto;padding:16px;color:#14202b}
-    a{color:#0b5cad}table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #dde3ea;text-align:left}
-    .m{padding:10px 12px;border-radius:12px;margin:8px 0;max-width:85%}.lead{background:#eef1f5}
-    .agent{background:#d9ecff;margin-left:auto}.staff{background:#d7f5df;margin-left:auto}
-    .event,.system_notice{color:#5b6773;font-size:14px}.tag{font-size:13px;color:#5b6773}
-    textarea{width:100%;font:16px system-ui;min-height:90px}button{font:16px system-ui;padding:10px 16px;margin:6px 6px 0 0}
-    </style>"""
-
-    @app.get("/admin", response_class=HTMLResponse)
-    def inbox(token: str):
-        require_admin(token)
-        with app.state.sf() as db:
-            leads = db.scalars(select(Lead).order_by(Lead.last_message_at.desc().nulls_last()).limit(200)).all()
-            rows = "".join(
-                f"<tr><td><a href='/admin/leads/{l.id}?token={html.escape(token)}'>"
-                f"{html.escape(l.full_name or l.phone)}</a><div class='tag'>{html.escape(l.client.name)}</div></td>"
-                f"<td>{html.escape(l.status)}{' (paused)' if l.paused else ''}{' (opted out)' if l.opted_out else ''}</td>"
-                f"<td>{html.escape(l.source)}</td></tr>" for l in leads)
-        return f"<!DOCTYPE html><title>Leads</title>{STYLE}<h1>Leads</h1><table><tr><th>Lead</th><th>Status</th><th>Source</th></tr>{rows}</table>"
-
-    @app.get("/admin/leads/{lead_id}", response_class=HTMLResponse)
-    def thread(lead_id: int, token: str):
-        require_admin(token)
-        with app.state.sf() as db:
-            lead = db.get(Lead, lead_id)
-            if lead is None:
-                raise HTTPException(404)
-            msgs = "".join(
-                f"<div class='m {m.role}'>{'' if m.role in ('lead', 'agent', 'staff') else '['+m.role+'] '}"
-                f"{html.escape(m.body)}<div class='tag'>{m.role} · {as_utc(m.created_at):%b %d %H:%M} UTC</div></div>"
-                for m in lead.messages)
-            t = html.escape(token)
-            state = "Paused: a person is handling this lead" if lead.paused else "Assistant is handling this lead"
-            details = " · ".join(html.escape(str(x)) for x in [
-                lead.phone, lead.service_type, lead.zip_code, lead.urgency, lead.status] if x)
-            toggle = (f"<form method='post' action='/admin/leads/{lead.id}/resume'><input type='hidden' name='token' value='{t}'>"
-                      f"<button>Resume assistant</button></form>" if lead.paused else
-                      f"<form method='post' action='/admin/leads/{lead.id}/pause'><input type='hidden' name='token' value='{t}'>"
-                      f"<button>Take over (pause assistant)</button></form>")
-            name = html.escape(lead.full_name or lead.phone)
-        return (f"<!DOCTYPE html><title>{name}</title>{STYLE}<p><a href='/admin?token={t}'>All leads</a></p>"
-                f"<h1>{name}</h1><p class='tag'>{details}</p><p><b>{state}</b></p>{msgs}"
-                f"<form method='post' action='/admin/leads/{lead_id}/reply'><input type='hidden' name='token' value='{t}'>"
-                f"<textarea name='body' required placeholder='Text the customer (this pauses the assistant)'></textarea>"
-                f"<button>Send text</button></form>{toggle}")
-
-    @app.post("/admin/leads/{lead_id}/reply")
-    def reply(lead_id: int, token: str = Form(...), body: str = Form(...)):
-        require_admin(token)
-        with app.state.sf() as db:
-            lead = db.get(Lead, lead_id)
-            if lead is None:
-                raise HTTPException(404)
-            flows.staff_reply(db, get_deps(), lead, body)
-        return RedirectResponse(f"/admin/leads/{lead_id}?token={token}", status_code=303)
-
-    @app.post("/admin/leads/{lead_id}/pause")
-    def pause(lead_id: int, token: str = Form(...)):
-        require_admin(token)
-        with app.state.sf() as db:
-            lead = db.get(Lead, lead_id)
-            lead.paused, lead.paused_reason = True, "manual_takeover"
-            db.commit()
-        return RedirectResponse(f"/admin/leads/{lead_id}?token={token}", status_code=303)
-
-    @app.post("/admin/leads/{lead_id}/resume")
-    def resume(lead_id: int, token: str = Form(...)):
-        require_admin(token)
-        with app.state.sf() as db:
-            lead = db.get(Lead, lead_id)
-            lead.paused, lead.paused_reason = False, None
-            if lead.status == "escalated":
-                lead.status = "booked" if lead.appointment_start else "active"
-            db.commit()
-        return RedirectResponse(f"/admin/leads/{lead_id}?token={token}", status_code=303)
+    # ---------------- Staff inbox (login required) ----------------
+    from .staff import install_staff
+    install_staff(app, settings, get_deps)
 
     @app.get("/health")
     def health():

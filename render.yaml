@@ -6,7 +6,7 @@ services:
     name: speed-to-lead-demo
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -17,8 +17,8 @@ services:
         value: gemini-3.8-flash
       - key: GEMINI_API_KEY
         sync: false          # Render asks you to paste it when you create the Blueprint
-      - key: ADMIN_TOKEN
-        generateValue: true  # random value; the staff inbox stays locked
+      - key: SESSION_SECRET
+        generateValue: true  # signs staff login cookies
       - key: ENABLE_DEMO
         value: "true"
       - key: DEMO_DAILY_ACTION_LIMIT

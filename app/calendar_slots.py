@@ -84,14 +84,26 @@ class GoogleCalendar:
     """Reads and writes the client's Google Calendar through a service account.
     The client shares their calendar with the service account's email ("Make changes to events")."""
 
-    def __init__(self, service_account_json_b64: str):
+    def __init__(self, service_account_json_b64: str = "", service=None):
+        if service is not None:  # tests inject a service backed by fake HTTP
+            self.service = service
+            self.service_account_email = "test@example.iam.gserviceaccount.com"
+            return
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
 
-        info = json.loads(base64.b64decode(service_account_json_b64))
+        try:
+            info = json.loads(base64.b64decode(service_account_json_b64))
+        except (ValueError, TypeError) as exc:
+            raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON_B64 is not valid base64-encoded JSON") from exc
+        self.service_account_email = info.get("client_email", "")
         creds = service_account.Credentials.from_service_account_info(
             info, scopes=["https://www.googleapis.com/auth/calendar"])
         self.service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+
+    def delete_event(self, calendar_id: str, event_id: str) -> None:
+        """Used by scripts/preflight.py to clean up its test event."""
+        self.service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
 
     def busy_intervals(self, calendar_id, start, end):
         items, page_token = [], None

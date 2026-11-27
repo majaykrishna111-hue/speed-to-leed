@@ -1,0 +1,48 @@
+# PRODUCTION Blueprint: always-on server + permanent Postgres database.
+# Use it for real businesses. The free demo keeps using render.yaml.
+#
+# Render dashboard -> New -> Blueprint -> this repo -> Blueprint Path: render.production.yaml
+# Cost at the time of writing: web 0.5c-512mb $7/month + Postgres 0.1c-256mb $6/month (+ storage).
+services:
+  - type: web
+    runtime: python
+    name: speed-to-lead
+    plan: 0.5c-512mb          # paid: never sleeps, so Twilio's webhooks always get a fast answer
+    region: virginia          # close to North Carolina; must match the database's region
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: DATABASE_URL
+        fromDatabase:
+          name: speed-to-lead-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ENABLE_DEMO
+        value: "false"
+      - key: VALIDATE_TWILIO_SIGNATURE
+        value: "true"
+      - key: TWILIO_HANDLES_OPT_OUT
+        value: "true"
+      - key: LLM_PROVIDER
+        value: anthropic
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5-5
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON_B64
+        sync: false
+
+databases:
+  - name: speed-to-lead-db
+    plan: 0.1c-256mb          # paid: permanent (free databases expire)
+    region: virginia
+    postgresMajorVersion: '16'  # the version the test suite runs against
+    ipAllowList: []           # reachable only from your Render services, not the internet

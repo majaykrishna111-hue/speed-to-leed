@@ -18,7 +18,7 @@ Lead texts   ──► POST /webhooks/twilio/sms     ─┘         │
                                                 ├─ escalate ─► Slack / email alert + pause lead
                                                 └─ guardrails ─► Twilio SMS (≤300 chars)
                                               Postgres: clients · leads · messages · slot_offers · event_log
-Owner ──► /admin inbox: read threads, reply as staff (pauses agent), take over / resume
+Owner ──► /admin inbox (login required): read threads, reply as staff (pauses agent), take over / resume
 ```
 
 **Memory.** Every text in and out is a row in `messages`, keyed to one `leads` row per (business, phone number). Each turn, the agent gets the last 40 messages plus a structured summary (name, service, ZIP, urgency, slots already offered) in the system prompt. State lives in the database, so restarts lose nothing.
@@ -43,7 +43,8 @@ Owner ──► /admin inbox: read threads, reply as staff (pauses agent), take 
 ```
 prompts/system_prompt.md   Step 1: the system prompt (loaded by the app) + example values
 prompts/tools.json         Step 2: the six tool schemas sent to Claude
-app/main.py                Webhooks (Twilio SMS/voice, web form) and the /admin staff inbox
+app/main.py                Webhooks (Twilio SMS/voice, web form)
+app/staff.py               Staff inbox at /admin: logins, per-business access, CSRF, lockout
 app/demo.py                Live demo API at /demo (simulated phone, calendar, alerts; real LLM)
 app/static/demo.html       The demo page (single file, Tailwind via CDN)
 app/flows.py               What each trigger does: STOP/START/HELP, consent, paused leads, missed calls
@@ -55,13 +56,17 @@ app/adapters.py            Gemini + Claude clients (same interface), Twilio, Sla
 app/models.py              Database tables (schema.sql is generated from these)
 clients/triangle_comfort.json   Example client config (fictional HVAC company)
 scripts/simulate.py        Chat with the real agent in your terminal, no Twilio or Google needed
-scripts/upsert_client.py   Add or update a client from its JSON file
+scripts/upsert_client.py   Add or update a client from its JSON file (or pasted JSON)
+scripts/create_user.py     Create staff logins (business owners and you)
+scripts/preflight.py       Go-live check of every real connection
 scripts/export_schema.py   Regenerate schema.sql
 scenarios/                 Step 4 replay files for the simulator
 TEST_SCENARIOS.md          Step 4: the sample conversations and pass checks
 DEPLOY.md                  Put the demo online for free (GitHub + Render)
+PRODUCTION.md              Launch for a real business (always-on server, Postgres, logins)
+render.production.yaml     Render Blueprint for production
 render.yaml                Render Blueprint for one-click deploys
-tests/                     55 automated tests (no API keys needed)
+tests/                     86 automated tests (no API keys needed)
 ```
 
 ## 3. Run it locally (about 15 minutes)
@@ -69,9 +74,9 @@ tests/                     55 automated tests (no API keys needed)
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env            # add GEMINI_API_KEY; set ADMIN_TOKEN to a long random string
+cp .env.example .env            # add GEMINI_API_KEY; set SESSION_SECRET to a long random string
 
-pytest -q                       # 55 tests, all offline
+pytest -q                       # 86 tests, all offline
 
 # Talk to the agent with the real model (texts and calendar are simulated):
 python scripts/simulate.py --source web_form --name "Jordan Lee" --message "AC blowing warm air"
@@ -155,7 +160,7 @@ Callers with blocked caller ID can't be texted. Those calls are logged and skipp
 ### 4.7 Owner alerts
 - **Slack:** in the client's Slack, create an app with Incoming Webhooks turned on, add it to a channel, and paste the webhook URL into `slack_webhook_url`.
 - **Email (optional):** set the `SMTP_*` variables (a Gmail app password or a SendGrid SMTP key works), plus the client's `owner_email`.
-- Alerts go out for escalations, new bookings (turn off with `notify_on_booking: false`), texts from paused leads, form leads without consent, and agent errors. Each alert links to that lead's thread in the staff inbox.
+- Alerts go out for escalations, new bookings (turn off with `notify_on_booking: false`), texts from paused leads, form leads without consent, and agent errors. Each alert links to that lead's thread in the staff inbox (login required).
 
 ### 4.8 The website form
 Send a POST to `https://YOUR-APP/webhooks/form/{client-slug}` with the form secret in an `X-Form-Key` header (or `?key=` in the URL). The body can be JSON or form-encoded:
@@ -188,7 +193,7 @@ Then run the go-live checklist below.
 
 ## 6. Operating it
 
-- **Staff inbox:** `https://YOUR-APP/admin?token=ADMIN_TOKEN`. The token is in alert links, so treat them as private. Put real login in front of `/admin` before you have many clients.
+- **Staff inbox:** `https://YOUR-APP/admin`. Everyone logs in with their own account (`scripts/create_user.py`); business owners only see their own leads. Alert links contain no secrets and open the conversation after login.
 - **Everything is logged** in `event_log`: every tool call with its input and result, plus errors, opt-outs and escalations.
 - **Monthly results for each client** (this is what you show them to justify the fee):
 

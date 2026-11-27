@@ -37,7 +37,7 @@ You'll end up with a public link like `https://speed-to-lead-demo.onrender.com` 
 | Someone burns your Gemini quota | 30 customer actions per conversation, 300 per day across everyone (`DEMO_MAX_ACTIONS_PER_SESSION`, `DEMO_DAILY_ACTION_LIMIT` in Render's Environment tab). A key with no billing can't cost money. |
 | Visitors see each other's chats | Every browser tab has its own private session; idle sessions are deleted after 30 minutes. |
 | Real texts or bookings | None. The demo's phone, calendar and alerts are simulated and nothing is stored after a restart. |
-| The staff inbox | Locked with a random `ADMIN_TOKEN` that Render generated. |
+| The staff inbox | Login required; nobody has an account on the demo service, so it stays locked. |
 | Want it private? | Add `DEMO_TOKEN` in Render's Environment tab; the link then becomes `https://YOUR-APP.onrender.com/demo?token=YOUR_TOKEN`. |
 
 Free-tier Gemini prompts may be used by Google to improve its products, which is fine for this demo because it only has fictional data. Use a paid key before any real customer texts go through the agent.

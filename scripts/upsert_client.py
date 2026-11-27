@@ -1,6 +1,13 @@
 """Create or update a client (business) from a JSON file.
 
     python scripts/upsert_client.py clients/triangle_comfort.json
+
+On the production server (Render -> service -> Shell), paste the JSON instead of committing it,
+because a real client's file holds secrets (form_secret, Slack webhook):
+
+    python scripts/upsert_client.py - <<'JSON'
+    { ...the client's JSON... }
+    JSON
 """
 import json
 import sys
@@ -19,7 +26,7 @@ REQUIRED_CONFIG = set(STATIC_FIELDS.values()) | {"service_zips", "slot_windows",
 
 
 def main(path: str) -> None:
-    data = json.loads(Path(path).read_text())
+    data = json.loads(sys.stdin.read() if path == "-" else Path(path).read_text())
     missing = sorted(k for k in REQUIRED_CONFIG if not data["config"].get(k))
     if missing:
         sys.exit(f"Missing config values: {', '.join(missing)}")

@@ -119,6 +119,20 @@ class SlotOffer(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
+class StaffUser(Base):
+    """A login for the staff inbox. client_id=None means operator (you): sees every business."""
+    __tablename__ = "staff_users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True)
+    name: Mapped[str] = mapped_column(String(100), default="")
+    password_hash: Mapped[str] = mapped_column(String(300))
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column()
+
+
 class EventLog(Base):
     """Audit trail: tool calls, escalations, errors, opt-outs. Useful for debugging and client reports."""
     __tablename__ = "event_log"
@@ -131,7 +145,17 @@ class EventLog(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
+def normalize_database_url(url: str) -> str:
+    """Hosts like Render and Heroku hand out postgres:// or postgresql:// URLs, which SQLAlchemy maps
+    to the psycopg2 driver. This app ships psycopg 3, so point those URLs at it."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 def make_session_factory(database_url: str):
+    database_url = normalize_database_url(database_url)
     kwargs: dict[str, Any] = {"pool_pre_ping": True}
     if database_url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False}

@@ -1,7 +1,7 @@
 """End-to-end tests through the real webhooks, agent loop and tool handlers."""
 from datetime import timedelta
 
-from conftest import ADMIN, BUSINESS_NUMBER, LEAD_PHONE, last_tool_result, text, tool
+from conftest import BUSINESS_NUMBER, LEAD_PHONE, last_tool_result, text, tool
 from twilio.request_validator import RequestValidator
 
 OPENER = "Hi Jordan, this is Ava at Triangle Comfort Heating & Air. Sorry your AC is blowing warm air! What ZIP is the home in? Reply STOP to opt out."
@@ -142,7 +142,10 @@ def test_emergency_alert_is_urgent(env):
 def test_staff_reply_from_inbox_pauses_agent(env):
     env.llm.script(text(OPENER))
     env.submit_form()
-    r = env.http.post(f"/admin/leads/1/reply", data={"token": ADMIN, "body": "Hi Jordan, this is Mike the owner."},
+    env.add_user()
+    assert env.login().status_code == 303
+    token = env.csrf("/admin/leads/1")
+    r = env.http.post("/admin/leads/1/reply", data={"csrf": token, "body": "Hi Jordan, this is Mike the owner."},
                       follow_redirects=False)
     assert r.status_code == 303
     assert env.sms.sent[-1]["body"].startswith("Hi Jordan, this is Mike")
@@ -151,15 +154,16 @@ def test_staff_reply_from_inbox_pauses_agent(env):
     assert len(env.llm.calls) == calls and env.lead().paused
 
     # Owner hands it back: the agent answers the next text, and sees the staff message as context.
-    env.http.post("/admin/leads/1/resume", data={"token": ADMIN})
+    env.http.post("/admin/leads/1/resume", data={"csrf": env.csrf("/admin/leads/1")})
     env.llm.script(text("Happy to help get you scheduled. What ZIP is the home in?"))
     env.lead_texts("ok can I book now")
     history = env.llm.calls[-1]["messages"]
     assert any("(Sent by a team member)" in str(m["content"]) for m in history)
 
 
-def test_admin_requires_token(env):
-    assert env.http.get("/admin?token=wrong").status_code == 403
+def test_admin_requires_login(env):
+    r = env.http.get("/admin", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/admin/login")
 
 
 # ---------- Opt-out ----------

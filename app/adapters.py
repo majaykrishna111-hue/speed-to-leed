@@ -267,9 +267,9 @@ class OptedOutError(Exception):
 
 
 class TwilioSMS:
-    def __init__(self, account_sid: str, auth_token: str):
+    def __init__(self, account_sid: str, auth_token: str, http_client=None):
         from twilio.rest import Client
-        self.client = Client(account_sid, auth_token)
+        self.client = Client(account_sid, auth_token, http_client=http_client)
 
     def send(self, from_number: str, to_number: str, body: str) -> str:
         from twilio.base.exceptions import TwilioRestException

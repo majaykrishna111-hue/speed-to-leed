@@ -223,7 +223,7 @@ def book_appointment(ctx: ToolContext, a: BookAppointment) -> dict:
 
 def inbox_link(ctx: ToolContext) -> str:
     s = ctx.deps.settings
-    return f"{s.public_base_url.rstrip('/')}/admin/leads/{ctx.lead.id}?token={s.admin_token}"
+    return f"{s.public_base_url.rstrip('/')}/admin/leads/{ctx.lead.id}"  # login required to open
 
 
 def owner_response_time(cfg: dict, tz_name: str, now: datetime) -> str:

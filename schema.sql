@@ -45,6 +45,22 @@ CREATE TABLE leads (
 
 CREATE INDEX ix_leads_client_id ON leads (client_id);
 
+CREATE TABLE staff_users (
+	id SERIAL NOT NULL, 
+	email VARCHAR(200) NOT NULL, 
+	name VARCHAR(100) NOT NULL, 
+	password_hash VARCHAR(300) NOT NULL, 
+	client_id INTEGER, 
+	active BOOLEAN NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE NOT NULL, 
+	last_login_at TIMESTAMP WITH TIME ZONE, 
+	PRIMARY KEY (id), 
+	UNIQUE (email), 
+	FOREIGN KEY(client_id) REFERENCES clients (id)
+);
+
+CREATE INDEX ix_staff_users_client_id ON staff_users (client_id);
+
 CREATE TABLE event_log (
 	id SERIAL NOT NULL, 
 	lead_id INTEGER, 

@@ -26,7 +26,7 @@ TZ = ZoneInfo("America/New_York")
 NOW = datetime(2026, 7, 10, 14, 14, tzinfo=TZ)  # Friday afternoon
 LEAD_PHONE = "+19195550142"
 BUSINESS_NUMBER = "+19195550100"
-ADMIN = "test-admin-token"
+STAFF_PASSWORD = "correct horse battery"
 
 
 def tool(name, **inp):
@@ -77,16 +77,29 @@ def last_tool_result(messages) -> dict:
     raise AssertionError("no tool result")
 
 
+def make_test_db():
+    """SQLite in memory by default. Set TEST_DATABASE_URL to run the suite on real Postgres."""
+    url = os.environ.get("TEST_DATABASE_URL", "sqlite://")
+    if url.startswith("sqlite"):
+        return make_session_factory(url)
+    from sqlalchemy import create_engine
+    from app.models import Base
+    engine = create_engine(url)
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+    return make_session_factory(url)
+
+
 @pytest.fixture
 def env():
     settings = Settings(database_url="sqlite://", public_base_url="https://agent.example.com",
-                        admin_token=ADMIN, anthropic_api_key="test", twilio_auth_token="tw-secret",
+                        session_secret="test-session-secret", anthropic_api_key="test", twilio_auth_token="tw-secret",
                         validate_twilio_signature=False, twilio_handles_opt_out=True)
     clock = {"now": NOW}
     llm, sms, alerts, cal = ScriptedLLM(), FakeSMS(), FakeAlerts(), FakeCalendar()
     deps = Deps(llm=llm, sms=sms, alerts=alerts, calendar=cal, settings=settings,
                 now=lambda: clock["now"].astimezone(ZoneInfo("UTC")))
-    sf = make_session_factory("sqlite://")
+    sf = make_test_db()
     data = json.loads((ROOT / "clients" / "triangle_comfort.json").read_text())
     data["config"]["form_secret"] = "form-secret"
     with sf() as db:
@@ -94,7 +107,7 @@ def env():
                       timezone=data["timezone"], calendar_id="cal", config=data["config"]))
         db.commit()
     app = create_app(deps=deps, session_factory=sf)
-    http = TestClient(app)
+    http = TestClient(app, base_url="https://testserver")  # HTTPS so Secure cookies flow
 
     def lead():
         with sf() as db:
@@ -109,6 +122,30 @@ def env():
                    "message": "AC running but blowing warm air", "zip": "", "sms_consent": True, **extra}
         return http.post("/webhooks/form/triangle-comfort", json=payload, headers={"X-Form-Key": "form-secret"})
 
+    def add_user(email="owner@example.com", client_slug="triangle-comfort", password=STAFF_PASSWORD):
+        from app.models import Client as C, StaffUser
+        from app.staff import hash_password
+        with sf() as db:
+            cid = None if client_slug is None else db.query(C).filter_by(slug=client_slug).one().id
+            db.add(StaffUser(email=email, password_hash=hash_password(password), client_id=cid))
+            db.commit()
+
+    def login(email="owner@example.com", password=STAFF_PASSWORD, client=None):
+        c = client or http
+        token = csrf_from(c.get("/admin/login").text)
+        return c.post("/admin/login", data={"email": email, "password": password, "csrf": token,
+                                            "next": "/admin"}, follow_redirects=False)
+
+    def csrf(path="/admin", client=None):
+        return csrf_from((client or http).get(path).text)
+
     return SimpleNamespace(settings=settings, clock=clock, llm=llm, sms=sms, alerts=alerts, cal=cal,
                            deps=deps, sf=sf, http=http, lead=lead, lead_texts=lead_texts,
-                           submit_form=submit_form)
+                           submit_form=submit_form, add_user=add_user, login=login, csrf=csrf, app=app)
+
+
+def csrf_from(page_html: str) -> str:
+    import re
+    m = re.search(r"name='csrf' value='([^']+)'", page_html)
+    assert m, "no CSRF field on page"
+    return m.group(1)
